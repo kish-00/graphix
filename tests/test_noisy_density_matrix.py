@@ -70,7 +70,9 @@ class TestNoisyDensityMatrixBackend:
         )
         # result should be |1>
         assert isinstance(res, DensityMatrix)
-        assert np.allclose(res.rho, np.array([[0.0, 0.0], [0.0, 1.0]]))
+        expected = np.array([[0.0, 0.0], [0.0, 1.0]])
+        assert np.allclose(res.rho, expected, atol=1e-10)
+
 
     @pytest.mark.parametrize("outcome", [0, 1])
     def test_noisy_measure_confuse_hadamard_arbitrary(self, fx_rng: Generator, outcome: Outcome) -> None:
@@ -736,6 +738,21 @@ class TestNoisyDensityMatrixBackend:
         k0, k1 = TestNoisyDensityMatrixBackend._ad_kraus(gamma)
         return k0 @ rho_out @ k0.conj().T + k1 @ rho_out @ k1.conj().T  # type: ignore[no-any-return]
 
+    @staticmethod
+    def _amplitude_damping_z_error_analytical(
+        gamma: float, alpha: float, outcome: Outcome
+    ) -> npt.NDArray[np.complex128]:
+        phi = alpha * np.pi
+        rho = 0.5 * np.array(
+            [[1, np.exp(-1j * phi)], [np.exp(1j * phi), 1]], dtype=np.complex128
+        )
+        if outcome == 1:
+            # With ConstBranchSelector(1) both X and Z corrections fire,
+            # restoring the state to rho_rz. AD is then applied to the restored state.
+            k0, k1 = TestNoisyDensityMatrixBackend._ad_kraus(gamma)
+            rho = k0 @ rho @ k0.conj().T + k1 @ rho @ k1.conj().T
+        return rho
+
     # --- Tests using analytical formulas ---
 
     @pytest.mark.parametrize("outcome", [0, 1])
@@ -797,6 +814,25 @@ class TestNoisyDensityMatrixBackend:
         res = hadamardpattern.simulate_pattern(
             backend="densitymatrix",
             noise_model=AmplitudeDampingNoiseModel(x_error_prob=gamma),
+            branch_selector=ConstBranchSelector(outcome),
+            rng=fx_rng,
+        )
+        assert isinstance(res, DensityMatrix)
+        assert np.allclose(res.rho, expected, atol=1e-10)
+
+    @pytest.mark.parametrize("outcome", [0, 1])
+    def test_amplitude_damping_z_error_analytical(
+        self, fx_rng: Generator, outcome: Outcome
+    ) -> None:
+        gamma = fx_rng.uniform(0.0, 0.9)
+        alpha = fx_rng.uniform(0.0, 1.0)
+        rzpattern = rzpat(alpha)
+        expected = TestNoisyDensityMatrixBackend._amplitude_damping_z_error_analytical(
+            gamma, alpha, outcome
+        )
+        res = rzpattern.simulate_pattern(
+            backend="densitymatrix",
+            noise_model=AmplitudeDampingNoiseModel(z_error_prob=gamma),
             branch_selector=ConstBranchSelector(outcome),
             rng=fx_rng,
         )

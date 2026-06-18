@@ -228,3 +228,7 @@ class TestChannel:
             amplitude_damping_channel(-0.1)
         with pytest.raises(ValueError):
             amplitude_damping_channel(1.1)
+        with pytest.raises(ValueError):
+            two_qubit_amplitude_damping_channel(-0.1)
+        with pytest.raises(ValueError):
+            two_qubit_amplitude_damping_channel(1.1)
